@@ -583,14 +583,12 @@ def gen_atomic_tasks(
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir, exist_ok=True)
 
-    crawler = SimpleCrawler(serpapi_key=os.getenv("SERP_API_KEY"))
+    crawler = SimpleCrawler()
     input_reader = CrawlerReadTool(crawler, read_type='jina_read')
     model = OpenAIServerModel(
         model_id,
         custom_role_conversions=CUSTOM_ROLE_CONVERSIONS,
         max_completion_tokens=max_completion_tokens,
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        api_base=os.environ.get("OPENAI_API_BASE"),
     )
 
     args = types.SimpleNamespace(

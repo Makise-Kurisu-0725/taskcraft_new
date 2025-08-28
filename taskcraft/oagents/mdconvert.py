@@ -32,6 +32,7 @@ import speech_recognition as sr
 from bs4 import BeautifulSoup
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import SRTFormatter
+from transformers import AutoTokenizer
 
 
 class _CustomMarkdownify(markdownify.MarkdownConverter):
@@ -741,20 +742,20 @@ class ImageConverter(MediaConverter):
         messages = [
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": data_uri,
-                        },
-                    },
-                ],
+                "content": f"{prompt}\nImage: {data_uri}"
             }
         ]
-
-        response = client.chat.completions.create(model=model, messages=messages)
-        return response.choices[0].message.content
+        tokenizer = AutoTokenizer.from_pretrained('/Users/lbw/vscode/models/qwen3_coder')
+        input_str = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        response = client.completions.create(
+            model="",
+            prompt=input_str,
+            echo=False,
+            stream=False,
+            n=1,
+            max_tokens=256,
+        )
+        return response.choices[0].text
 
 
 class FileConversionException(Exception):

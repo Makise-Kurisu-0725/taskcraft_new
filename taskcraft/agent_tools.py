@@ -5,7 +5,6 @@
 # @LICENSE      : Apache License 2.0
 
 import logging
-import os
 from functools import partial
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -33,7 +32,7 @@ class BaseAgent:
 class SearchAgent(BaseAgent):
     def __init__(self, model, name, **kwargs):
         super().__init__(model, name)
-        crawler = SimpleCrawler(serpapi_key=os.environ.get("SERPAPI_API_KEY"))
+        crawler = SimpleCrawler()
         search = CrawlerSearchTool(crawler)  # inputs: query
         read = CrawlerReadTool(crawler)  # inputs: url
         archive_search = CrawlerArchiveSearchTool(crawler)

@@ -42,8 +42,8 @@ This tool supports the following image formats: [".jpg", ".jpeg", ".png", ".gif"
         super().__init__()
         self.model = model
         self.text_limit = text_limit
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        self.base_url = os.getenv("OPENAI_API_BASE")
+        self.api_key = ""
+        self.base_url = ""
 
     def _validate_file_type(self, file_path: str):
         """Validate if the file type is a supported image format"""

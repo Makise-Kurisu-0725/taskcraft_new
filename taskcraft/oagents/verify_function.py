@@ -1,20 +1,18 @@
 #load test case 
 import json
-import os
 from openai import OpenAI
+from transformers import AutoTokenizer
 # from browser_env.utils import pil_to_b64, pil_to_vertex
 import numpy as np
 from PIL import Image
 import requests
 import re
-import openai
 import asyncio  # 添加异步支持
 
-KEY = ""
-URL = ""  # 智慧地球
 MODEL = "gpt-4.1"
 
-client = openai.OpenAI(api_key=KEY, base_url=URL, timeout=600.0, max_retries=3)
+client = OpenAI(api_key="", base_url="")
+tokenizer = AutoTokenizer.from_pretrained('/Users/lbw/vscode/models/qwen3_coder')
 
 def exact_content(response):
     content_list=[]
@@ -69,13 +67,16 @@ def evaluate_answer(text, system_prompt, mode='PRM'):
         }
     ]
     try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=messages,
+        input_str = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        response = client.completions.create(
+            model="",
+            prompt=input_str,
+            echo=False,
+            stream=False,
+            n=1,
             max_tokens=256,
-            top_p=1.0
         )
-        content = response.choices[0].message.content
+        content = response.choices[0].text
             
         # if mode=='PRM':
         #     # Extract PRM score

@@ -73,8 +73,6 @@ def parse_arguments(description):
 def load_model(model_type: str, model_id: str) -> Model:
     if model_type == "OpenAIServerModel":
         return OpenAIServerModel(
-            api_key=os.getenv("FIREWORKS_API_KEY"),
-            api_base="https://api.fireworks.ai/inference/v1",
             model_id=model_id,
         )
     elif model_type == "LiteLLMModel":

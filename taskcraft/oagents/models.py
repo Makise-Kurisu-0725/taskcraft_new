@@ -33,7 +33,10 @@ from openai import (
     APIStatusError,
     APIConnectionError,
     OpenAIError,
+    OpenAI,
 )
+import openai
+from transformers import AutoTokenizer
 import time
 import re
 import pdb
@@ -957,21 +960,10 @@ class OpenAIServerModel(Model):
         custom_role_conversions: Optional[Dict[str, str]] = None,
         **kwargs,
     ):
-        try:
-            import openai
-        except ModuleNotFoundError:
-            raise ModuleNotFoundError(
-                "Please install 'openai' extra to use OpenAIServerModel: `pip install 'oagents[openai]'`"
-            ) from None
-
         super().__init__(**kwargs)
         self.model_id = model_id
-        self.client = openai.OpenAI(
-            base_url=api_base,
-            api_key=api_key,
-            organization=organization,
-            project=project,
-        )
+        self.client = OpenAI(api_key="", base_url="")
+        self.tokenizer_model_path = "/Users/lbw/vscode/models/qwen3_coder"
         self.custom_role_conversions = custom_role_conversions
 
     @staticmethod
@@ -984,7 +976,7 @@ class OpenAIServerModel(Model):
             if index != -1:
                 content = content[:index + len(stop_seq)]
                 break  # Only keep the first match
-        return content
+
     def __call__(
         self,
         messages: List[Dict[str, str]],
@@ -1003,72 +995,36 @@ class OpenAIServerModel(Model):
             convert_images_to_image_urls=True,
             **kwargs,
         )
-
-        # Check if model_id contains 'o3' or 'o4'
-        if 'o3' in self.model_id.lower() or 'o4' in self.model_id.lower():
-            # Remove stop_sequences from completion_kwargs
-            completion_kwargs.pop('stop', None)
-
-        # response = self.client.chat.completions.create(**completion_kwargs)
+        messages = completion_kwargs.get("messages", [])
+        tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_model_path)
+        input_str = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 
         max_retries = 5
-        retry_delay = 5  # seconds
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(**completion_kwargs)
-
-                self.last_input_token_count = response.usage.prompt_tokens
-                self.last_output_token_count = response.usage.completion_tokens
-
-                if not response.choices[0].message.content and not getattr(response.choices[0].message, 'tool_calls', None):  # o1 o3-mini
-                    raise EmptyContentError(response)
-
-                message = ChatMessage.from_dict(
-                    response.choices[0].message.model_dump(include={"role", "content", "tool_calls"})
+                completion = self.client.completions.create(
+                    model="",
+                    prompt=input_str,
+                    echo=False,
+                    stream=False,
+                    n=1,
+                    max_tokens=8096,
                 )
-                message.raw = response
-
-                # If model_id contains 'o3' or 'o4', manually truncate content based on stop_sequences
-                if 'o3' in self.model_id.lower() or 'o4' in self.model_id.lower():
-                    message.content = self.truncate_content_based_on_stop_sequences(message.content, stop_sequences)
-
+                usage = getattr(completion, "usage", {})
+                self.last_input_token_count = getattr(usage, "prompt_tokens", 0)
+                self.last_output_token_count = getattr(usage, "completion_tokens", 0)
+                out_str = completion.choices[0].text
+                message = ChatMessage(role="assistant", content=out_str)
+                message.raw = completion
                 if tools_to_call_from is not None:
                     return parse_tool_args_if_needed(message)
                 return message
-            except BadRequestError as e:
-                logger.error("Bad Request Error:", e)
-                raise
-            except APIConnectionError as e:
-                if attempt < max_retries:
-                    logging.warning(f"Network error occurred: {e}. Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)
-                else:
-                    logging.error(f"Failed to complete request after {max_retries} retries.")
-                    raise
-            except (APIStatusError, EmptyContentError) as e:
-                if attempt < max_retries:
-                    logging.warning(f"API status error occurred: {e}. Retrying in 60 seconds...")
-                    time.sleep(60)
-                else:
-                    logging.error(f"Failed to complete request after {max_retries} retries.")
-                    raise
-            except OpenAIError as e:
-                logging.error(f"API error occurred: {e}.")
-                raise
             except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}.")
-                raise
-        # self.last_input_token_count = response.usage.prompt_tokens
-        # self.last_output_token_count = response.usage.completion_tokens
-        #
-        # message = ChatMessage.from_dict(
-        #     response.choices[0].message.model_dump(include={"role", "content", "tool_calls"})
-        # )
-        # message.raw = response
-        # if tools_to_call_from is not None:
-        #     return parse_tool_args_if_needed(message)
-        # return message
-
+                logger.error(f"API error occurred: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(10)
+                else:
+                    raise
 
 class AzureOpenAIServerModel(OpenAIServerModel):
     """This model connects to an Azure OpenAI deployment.
@@ -1263,21 +1219,10 @@ class FakeToolCallOpenAIServerModel(Model):
         custom_role_conversions: Optional[Dict[str, str]] = None,
         **kwargs,
     ):
-        try:
-            import openai
-        except ModuleNotFoundError:
-            raise ModuleNotFoundError(
-                "Please install 'openai' extra to use OpenAIServerModel: `pip install 'oagents[openai]'`"
-            ) from None
-
         super().__init__(**kwargs)
         self.model_id = model_id
-        self.client = openai.OpenAI(
-            base_url=api_base,
-            api_key=api_key,
-            organization=organization,
-            project=project,
-        )
+        self.client = OpenAI(api_key="", base_url="")
+        self.tokenizer_model_path = "/Users/lbw/vscode/models/qwen3_coder"
         self.custom_role_conversions = custom_role_conversions
 
     def _prepare_completion_kwargs(
@@ -1339,7 +1284,6 @@ class FakeToolCallOpenAIServerModel(Model):
         tools_to_call_from: Optional[List[Tool]] = None,
         **kwargs,
     ) -> ChatMessage:
-
         completion_kwargs = self._prepare_completion_kwargs(
             messages=messages,
             stop_sequences=stop_sequences,
@@ -1350,75 +1294,40 @@ class FakeToolCallOpenAIServerModel(Model):
             convert_images_to_image_urls=True,
             **kwargs,
         )
-
-        # 如果model_id.lower()中存在ep或r1，则将messages中的content的{type:text, text: str}转换为str
         if "ep" or "r1" in self.model_id.lower():
             completion_kwargs["messages"] = dict_content_to_str(completion_kwargs["messages"])
+        messages = completion_kwargs.get("messages", [])
+        tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_model_path)
+        input_str = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 
-        # response = self.client.chat.completions.create(**completion_kwargs)
-
-        max_retries = 5
-        retry_delay = 5  # seconds
         empty_message = ChatMessage.from_dict(
-            {"role": "assistant",
-             "content": "",
-             "tool_calls": ""}
+            {"role": "assistant", "content": "", "tool_calls": ""}
         )
+        max_retries = 5
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(**completion_kwargs)
-
-                self.last_input_token_count = response.usage.prompt_tokens
-                self.last_output_token_count = response.usage.completion_tokens
-
-                if not response.choices[0].message.content and not getattr(response.choices[0].message, 'tool_calls', None):  # o1 o3-mini
-                    raise EmptyContentError(response)
-
-                if tools_to_call_from is not None:
-                    response = parse_tool_call_to_response(response)
-
-                message = ChatMessage.from_dict(
-                    response.choices[0].message.model_dump(include={"role", "content", "tool_calls"})
+                completion = self.client.completions.create(
+                    model="",
+                    prompt=input_str,
+                    echo=False,
+                    stream=False,
+                    n=1,
+                    max_tokens=8096,
                 )
-                message.raw = response
-
+                usage = getattr(completion, "usage", {})
+                self.last_input_token_count = getattr(usage, "prompt_tokens", 0)
+                self.last_output_token_count = getattr(usage, "completion_tokens", 0)
+                out_str = completion.choices[0].text
+                message = ChatMessage(role="assistant", content=out_str)
+                message.raw = completion
                 return message
-            except BadRequestError as e:
-                logger.error("Bad Request Error:", e)
-                empty_message.raw = e.response
-                break
-            except APIConnectionError as e:
-                if attempt < max_retries:
-                    logging.warning(f"Network error occurred: {e}. Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)
-                else:
-                    logging.error(f"Failed to complete request after {max_retries} retries.")
-                    break
-            except (APIStatusError, EmptyContentError) as e:
-                if attempt < max_retries:
-                    logging.warning(f"API status error occurred: {e}. Retrying in 60 seconds...")
-                    time.sleep(60)
-                else:
-                    logging.error(f"Failed to complete request after {max_retries} retries.")
-                    empty_message.raw = e.response
-                    break
-            except OpenAIError as e:
-                logging.error(f"API error occurred: {e}.")
-                break
             except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}.")
-                break
+                logger.error(f"API error occurred: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(10)
+                else:
+                    break
         return empty_message
-        # self.last_input_token_count = response.usage.prompt_tokens
-        # self.last_output_token_count = response.usage.completion_tokens
-        #
-        # message = ChatMessage.from_dict(
-        #     response.choices[0].message.model_dump(include={"role", "content", "tool_calls"})
-        # )
-        # message.raw = response
-        # if tools_to_call_from is not None:
-        #     return parse_tool_args_if_needed(message)
-        # return message
 
 __all__ = [
     "MessageRole",
