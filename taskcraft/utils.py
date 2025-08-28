@@ -171,18 +171,4 @@ def extract_answer(output_text):
 
 def check_envs():
     """Check if required environment variables are set"""
-    api_base = os.environ.get("OPENAI_API_BASE")
-    if not api_base:
-        logging.warning("OPENAI_API_BASE environment variable is not set. ")
-
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        logging.warning("OPENAI_API_KEY environment variable is not set. ")
-
-    serpapi = os.environ.get("SERP_API_KEY")
-    if not serpapi:
-        logging.warning("SERP_API_KEY environment variable is not set. ")
-
-    jina_api = os.environ.get("JINA_API_KEY")
-    if not jina_api:
-        logging.warning("JINA_API_KEY environment variable is not set. ")
+    logging.info("Using fixed API configuration; environment variables are ignored.")

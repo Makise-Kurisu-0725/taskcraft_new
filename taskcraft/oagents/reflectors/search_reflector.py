@@ -5,7 +5,6 @@
 '''
 import yaml
 import json
-import os
 import importlib
 
 from ..models import OpenAIServerModel, ChatMessage
@@ -17,8 +16,6 @@ class SearchReflector:
         self.model = model if model is not None else \
                     OpenAIServerModel(
                         model_id="gpt-4.1",
-                        api_base=os.getenv("OPENAI_BASE_URL"),
-                        api_key=os.getenv("OPENAI_API_KEY")
                     )
 
         try:

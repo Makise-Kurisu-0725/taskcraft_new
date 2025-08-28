@@ -4,11 +4,11 @@
 
 # Shamelessly stolen from Microsoft Autogen team: thanks to them for this great resource!
 # https://github.com/microsoft/autogen/blob/gaia_multiagent_v01_march_1st/autogen/browser_utils.py
-import os
 import time
 from typing import Dict, List, Optional
 import requests
-from serpapi import GoogleSearch
+import http.client
+import json
 import asyncio
 from crawl4ai import AsyncWebCrawler
 from camel.embeddings import OpenAIEmbedding
@@ -42,7 +42,7 @@ class SimpleCrawler:
                  use_db: Optional[bool] = False,
                  path: Optional[str] = None,
                  ):
-        self.serpapi_key = os.getenv("SERP_API_KEY") if serpapi_key is None else serpapi_key
+        self.serpapi_key = serpapi_key
         self.model = model
 
         if model is not None and reflection:
@@ -133,75 +133,35 @@ Please return ONLY the overall scores as format: score:[final score]
 
     # serpapi return snippets and concat them to content
     def _search(self, query: str, filter_year: Optional[int] = None) -> List[str]:
-        if self.serpapi_key is None:
-            raise ValueError("Missing SerpAPI key.")
-
         self.history.append((query, time.time()))
-
-        params = {
-            "engine": "google",  # google
+        conn = http.client.HTTPConnection("api-hub.inner.chj.cloud")
+        payload = json.dumps({
             "q": query,
-            "api_key": self.serpapi_key,
-            "num": self.serp_num
+            "count": self.serp_num,
+        })
+        headers = {
+            'BCS-APIHub-RequestId': '67ee89ba-7050-4c04-a3d7-ac61a63499b3',
+            'X-CHJ-GWToken': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJpQW9TSVJFdXlvS3oyalNBeVo4RW9GWTBsUnlvMDRNWiJ9.UN49kDGrAXQKMa42kUo7kRUDpa6E0AhfKI8h8M-ugpY',
+            'Content-Type': 'application/json'
         }
-        if filter_year is not None:
-            params["tbs"] = f"cdr:1,cd_min:01/01/{filter_year},cd_max:12/31/{filter_year}"
-
-        search = GoogleSearch(params)
-
-        results = search.get_dict()
-        '''
-        @ serp result format -> json dict
-        dict_keys(['search_metadata', 
-                    'search_parameters', 
-                    'search_information', 
-                    'knowledge_graph', 
-                    'inline_images', 
-                    'related_questions', 
-                    'organic_results', 
-                    'top_stories_link', 
-                    'top_stories_serpapi_link', 
-                    'related_searches', 
-                    'pagination', 
-                    'serpapi_pagination']
-                    )
-        '''
-
-        self.page_title = f"{query} - Search"
-        if "organic_results" not in results.keys():
-            raise Exception(f"No results found for query: '{query}'. Use a less specific query.")
-        if len(results["organic_results"]) == 0:
-            year_filter_message = f" with filter year={filter_year}" if filter_year is not None else ""
-            return f"No results found for '{query}'{year_filter_message}. Try with a more general query, or remove the year filter."
-
-        web_snippets: List[str] = list()
+        conn.request("POST", "/bcs-apihub-tools-proxy-service/tool/apihub/search/v1.0/bing-native", payload, headers)
+        res = conn.getresponse()
+        data = json.loads(res.read())
+        values = data.get('data', {}).get('webPages', {}).get('value', [])
+        web_snippets: List[str] = []
         idx = 0
-        if "organic_results" in results:
-            for page in results["organic_results"]:
-                idx += 1
-                date_published = ""
-                if "date" in page:
-                    date_published = "\nDate published: " + page["date"]
-
-                source = ""
-                if "source" in page:
-                    source = "\nSource: " + page["source"]
-
-                snippet = ""
-                if "snippet" in page:
-                    snippet = "\n" + page["snippet"]
-
-                _search_result = {
-                    "idx": idx,
-                    "title": page["title"],
-                    "date": date_published,
-                    "snippet": snippet,
-                    "source": source,
-                    "link": page['link']
-                }
-
-                web_snippets.append(_search_result)
-
+        for page in values:
+            idx += 1
+            snippet = page.get('snippet', '')
+            _search_result = {
+                "idx": idx,
+                "title": page.get('name', ''),
+                "date": "",
+                "snippet": snippet,
+                "source": "",
+                "link": page.get('url', '')
+            }
+            web_snippets.append(_search_result)
         return web_snippets
 
     def _pre_visit(self, url):
@@ -436,17 +396,18 @@ Please return ONLY the overall scores as format: score:[final score]
     # read page through jina api
     def read_page(self, url):
         def jina_read(url):
-            jina_url = f'https://r.jina.ai/{url}'
+            conn = http.client.HTTPConnection("api-hub.inner.chj.cloud")
+            payload = json.dumps({
+                "url": url
+            })
             headers = {
-                'Authorization': f'Bearer {os.getenv("JINA_API_KEY")}',
-                'X-Engine': 'browser',
-                'X-Return-Format': 'text',
-                'X-Timeout': '10',
-                'X-Token-Budget': '80000'
+                'BCS-APIHub-RequestId': '67ee89ba-7050-4c04-a3d7-ac61a63499b3',
+                'X-CHJ-GWToken': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJpQW9TSVJFdXlvS3oyalNBeVo4RW9GWTBsUnlvMDRNWiJ9.UN49kDGrAXQKMa42kUo7kRUDpa6E0AhfKI8h8M-ugpY',
             }
-
-            response = requests.get(jina_url, headers=headers)
-            return response.text
+            conn.request("POST", "/bcs-apihub-tools-proxy-service/tool/v1/jina/jina-r", payload, headers)
+            res = conn.getresponse()
+            data = json.loads(res.read())
+            return data.get('data', {}).get('content', "")
         return jina_read(url)
 
 

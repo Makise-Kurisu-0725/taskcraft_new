@@ -113,8 +113,6 @@ def process_single_task(args):
         args.model_id,
         custom_role_conversions=CUSTOM_ROLE_CONVERSIONS,
         max_completion_tokens=8192,
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        api_base=os.environ.get("OPENAI_API_BASE"),
     )
     module = DepthExtend(model, search_agent=args.search_agent, verify_agent=args.verify_agent)
 
